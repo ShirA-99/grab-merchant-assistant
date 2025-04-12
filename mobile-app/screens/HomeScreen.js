@@ -30,7 +30,9 @@ const HomeScreen = ({ navigation, route }) => {
   const [salesData, setSalesData] = useState([]);
   const [salesError, setSalesError] = useState(null);
   const [selectedMerchant, setSelectedMerchant] = useState(merchantId || null);
-
+  const [salesMetrics, setSalesMetrics] = useState({});
+  const [merchantList, setMerchantList] = useState([]);
+  const [merchantListLoading, setMerchantListLoading] = useState(false);
   const screenWidth = Dimensions.get('window').width;
 
   useEffect(() => {
@@ -48,6 +50,13 @@ const HomeScreen = ({ navigation, route }) => {
     }
   }, [selectedMerchant]);
 
+  useEffect(() => {
+    if (merchantId) {
+      fetchSalesMetrics();
+    }
+  }, [merchantId]);
+
+  
   const loadMerchantData = async () => {
     try {
       setLoading(true);
@@ -65,6 +74,15 @@ const HomeScreen = ({ navigation, route }) => {
     }
   };
 
+  const fetchSalesMetrics = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/merchant/${merchantId}/sales/metrics`);
+      setSalesMetrics(response.data);
+    } catch (error) {
+      console.error('Error fetching sales metrics:', error);
+    }
+  };
+  
   const loadSalesData = async () => {
     try {
       const response = await axios.get(`${API_URL}/api/merchant/${selectedMerchant}/sales/daily?days=30`);
@@ -164,34 +182,46 @@ const HomeScreen = ({ navigation, route }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Today's Performance Summary */}
-      <Card style={styles.summaryCard}>
-        <Card.Content>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Today's Performance</Text>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-                {formatCurrency(merchantData?.today_sales || 0)}
-              </Text>
-              <Text style={styles.statLabel}>Today's Sales</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-                {merchantData?.today_orders || 0}
-              </Text>
-              <Text style={styles.statLabel}>Orders</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-                {merchantData?.today_orders > 0 
-                  ? formatCurrency(merchantData.today_sales / merchantData.today_orders) 
-                  : '$0.00'}
-              </Text>
-              <Text style={styles.statLabel}>Avg. Order</Text>
-            </View>
-          </View>
-        </Card.Content>
-      </Card>
+      {/* weekly Performance Summary */}
+    <View style={styles.sectionContainer}>
+      <Text style={styles.sectionTitle}>Weekly Sales Metrics</Text>
+      
+      <View style={styles.metricsRow}>
+        <Card style={styles.metricCard}>
+          <Text style={styles.metricLabel}>Total Sales</Text>
+          <Text style={styles.metricValue}>RM {salesMetrics.total_sales?.toFixed(2) || 0}</Text>
+          <Text style={[
+            styles.metricChange,
+            { color: salesMetrics.sales_change >= 0 ? '#28a745' : '#dc3545' }
+          ]}>
+            {salesMetrics.sales_change >= 0 ? '▲' : '▼'} {Math.abs(salesMetrics.sales_change || 0).toFixed(1)}%
+          </Text>
+        </Card>
+          
+    <Card style={styles.metricCard}>
+      <Text style={styles.metricLabel}>Avg Order Value</Text>
+      <Text style={styles.metricValue}>RM {salesMetrics.avg_order_value?.toFixed(2) || 0}</Text>
+      <Text style={[
+        styles.metricChange,
+        { color: salesMetrics.aov_change >= 0 ? '#28a745' : '#dc3545' }
+      ]}>
+        {salesMetrics.aov_change >= 0 ? '▲' : '▼'} {Math.abs(salesMetrics.aov_change || 0).toFixed(1)}%
+      </Text>
+    </Card>
+
+    <Card style={styles.metricCard}>
+      <Text style={styles.metricLabel}>Total Orders</Text>
+      <Text style={styles.metricValue}>{salesMetrics.total_orders || 0}</Text>
+      <Text style={[
+        styles.metricChange,
+        { color: salesMetrics.orders_change >= 0 ? '#28a745' : '#dc3545' }
+      ]}>
+        {salesMetrics.orders_change >= 0 ? '▲' : '▼'} {Math.abs(salesMetrics.orders_change || 0).toFixed(1)}%
+      </Text>
+    </Card>
+  </View>
+</View>
+
 
       {/* Yearly Sales Chart */}
       <Card style={styles.chartCard}>
@@ -357,6 +387,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  metricCard: {
+    flex: 1,
+    margin: 5,
+    paddingVertical: 15,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10
+  },
+  metricLabel: {
+    fontSize: 13,
+    color: '#555555',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  metricValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#00b14f', // Grab Green
+  },
+  metricChange: {
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: '600'
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    paddingTop: 10,
+    paddingBottom: 6
+  }, 
+  sectionContainer: {
+    marginTop: 20,
+    paddingHorizontal: 16, // Add some horizontal spacing
+    marginLeft: 10          // Shift the whole section slightly to the right
+  },   
   merchantInfoContainer: {
     flex: 1,
   },
@@ -447,13 +525,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     alignItems: 'center',
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.18,
-    shadowRadius: 1.0,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.25)',
     elevation: 1,
   },
   statIcon: {
