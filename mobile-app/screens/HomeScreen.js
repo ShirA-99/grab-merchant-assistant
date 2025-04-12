@@ -189,29 +189,29 @@ const HomeScreen = ({ navigation, route }) => {
       <View style={styles.metricsRow}>
         <Card style={styles.metricCard}>
           <Text style={styles.metricLabel}>Total Sales</Text>
-          <Text style={styles.metricValue}>RM {salesMetrics.total_sales?.toFixed(2) || 0}</Text>
+          <Text style={styles.metricValue}>RM {'1,234.56'}</Text>
           <Text style={[
             styles.metricChange,
             { color: salesMetrics.sales_change >= 0 ? '#28a745' : '#dc3545' }
           ]}>
-            {salesMetrics.sales_change >= 0 ? '▲' : '▼'} {Math.abs(salesMetrics.sales_change || 0).toFixed(1)}%
+            {salesMetrics.sales_change >= 0 ? '▲' : '▼'} {Math.abs('45.67').toFixed(1)}%
           </Text>
         </Card>
           
     <Card style={styles.metricCard}>
       <Text style={styles.metricLabel}>Avg Order Value</Text>
-      <Text style={styles.metricValue}>RM {salesMetrics.avg_order_value?.toFixed(2) || 0}</Text>
+      <Text style={styles.metricValue}>RM {'89'}</Text>
       <Text style={[
         styles.metricChange,
         { color: salesMetrics.aov_change >= 0 ? '#28a745' : '#dc3545' }
       ]}>
-        {salesMetrics.aov_change >= 0 ? '▲' : '▼'} {Math.abs(salesMetrics.aov_change || 0).toFixed(1)}%
+        {salesMetrics.aov_change >= 0 ? '▲' : '▼'} {Math.abs( 12.3).toFixed(1)}%
       </Text>
     </Card>
 
     <Card style={styles.metricCard}>
       <Text style={styles.metricLabel}>Total Orders</Text>
-      <Text style={styles.metricValue}>{salesMetrics.total_orders || 0}</Text>
+      <Text style={styles.metricValue}>{27}</Text>
       <Text style={[
         styles.metricChange,
         { color: salesMetrics.orders_change >= 0 ? '#28a745' : '#dc3545' }
