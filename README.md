@@ -1,8 +1,18 @@
-# grab-merchant-assistant
-beginning
-testing push
-3rd push
-testing push
-beginning
-testing push
-![output](image.png)
+# Team Quantum
+
+This is Team Quantum, we choosing Task 2 of Domain 3 as our task
+
+## Group Member
+- Chia Zhen Her
+- Chong Mei San
+- [Dwalton Voo Jia Leung](https://github.com/ShirA-99)
+- [Lian Yi Heng](https://github.com/Ahang040731)
+- Pang Xing Tang
+
+## Figma
+
+[Figma Prototype](https://www.figma.com/proto/ZL2GwLrr9JZNCom3P8IHbm/Grab-Merchant?node-id=0-1&t=iUcgPGojG1eVeUbb-1)
+
+[Power Point Slide](https://www.figma.com/deck/7DWsRZzpHTIl3gs0J8FwlK/Untitled?node-id=1-42&t=ip1LUjPq8TZsMb42-1)
+
+[Documentation](https://1drv.ms/w/c/51789d6dc47c7b81/Ef5wEfEMsXlGvEa-sjo7DgQB7Mz2n7kCbUFdXyH6ErfWkA?e=y6S9IR)
