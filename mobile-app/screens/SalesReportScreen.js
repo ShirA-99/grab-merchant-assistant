@@ -4,7 +4,7 @@ import { LineChart } from 'react-native-chart-kit';
 import axios from 'axios';
 
 // Replace with your API server address
-const API_URL = 'http://192.168.68.114:5000/api';
+const API_URL = 'http://192.168.68.114:5000';
 const MERCHANT_ID = 1; // Default merchant ID for demo
 
 export default function SalesReportScreen() {

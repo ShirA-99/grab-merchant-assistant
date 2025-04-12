@@ -1,9 +1,10 @@
+import { Platform } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import axios from 'axios';
 
 // API configuration - update to match your Flask server
-const API_URL = 'http://192.168.68.114:5000/api';
+const API_URL = 'http://192.168.68.114:5000';
 
 export default function InsightsScreen({ navigation, route }) {
   // Get merchant_id from route params if available, otherwise use default
