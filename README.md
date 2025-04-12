@@ -5,8 +5,8 @@ This is Team Quantum, we choosing Task 2 of Domain 3 as our task
 ## Group Member
 - Chia Zhen Her
 - Chong Mei San
-- Dwalton Voo Jia Leung
-- Lian Yi Heng
+- [Dwalton Voo Jia Leung](https://github.com/ShirA-99)
+- [Lian Yi Heng](https://github.com/Ahang040731)
 - Pang Xing Tang
 
 ## Figma
