@@ -1,451 +1,106 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
-  RefreshControl,
-  ActivityIndicator,
-  Alert
-} from 'react-native';
-import { Card } from 'react-native-paper';
-import { Ionicons } from '@expo/vector-icons';
-import axios from 'axios';
-import { Dimensions } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
+import { Dimensions } from 'react-native';
+import { fetchData } from '../utils.js/api';
 
-// API URL constant - replace with your actual API URL
-const API_URL = 'http://192.168.68.114:5000'; // Removed the /api suffix
+const screenWidth = Dimensions.get('window').width;
 
-const HomeScreen = ({ navigation, route }) => {
-  // Get merchant ID from route params or use null
-  const { merchantId } = route.params || {};
-  
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [merchantData, setMerchantData] = useState(null);
-  const [salesData, setSalesData] = useState([]);
-  const [salesError, setSalesError] = useState(null);
-  const [selectedMerchant, setSelectedMerchant] = useState(merchantId || null);
-
-  const screenWidth = Dimensions.get('window').width;
+export default function HomeScreen({ route }) {
+  const merchantId = route.params?.merchantId || 'M0001';
+  const [summary, setSummary] = useState(null);
+  const [items, setItems] = useState([]);
+  const [salesTrend, setSalesTrend] = useState([]);
 
   useEffect(() => {
-    // If we have a merchantId from navigation params, update selected merchant
-    if (route.params?.merchantId) {
-      setSelectedMerchant(route.params.merchantId);
+    async function loadData() {
+      const s = await fetchData(`/merchant/${merchantId}/summary`);
+      const i = await fetchData(`/merchant/${merchantId}/items/performance?days=30`);
+      const t = await fetchData(`/merchant/${merchantId}/sales/daily?days=7`);
+      if (s) setSummary(s);
+      if (i) setItems(i.items.slice(0, 3));
+      if (t) setSalesTrend(t);
     }
-  }, [route.params?.merchantId]);
-
-  useEffect(() => {
-    // Only load data if we have a selected merchant
-    if (selectedMerchant) {
-      loadMerchantData();
-      loadSalesData();
-    } else {
-      // If no merchant is selected, redirect to login screen
-      navigation.replace('MerchantLogin');
-    }
-  }, [selectedMerchant]);
-
-  const loadMerchantData = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get(`${API_URL}/api/merchant/${selectedMerchant}/summary`);
-      setMerchantData(response.data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching merchant data:', error);
-      setLoading(false);
-      Alert.alert(
-        'Error',
-        'Could not load merchant data. Please try again later.',
-        [{ text: 'OK' }]
-      );
-    }
-  };
-
-
-const loadSalesData = async () => {
-  try {
-    // Change days=7 to days=365 to get a full year of data
-    const response = await axios.get(`${API_URL}/merchant/${selectedMerchant}/sales/daily?days=365`);
-    setSalesData(response.data);
-    setSalesError(null);
-  } catch (error) {
-    console.error('Error fetching sales data:', error);
-    setSalesError('Could not load yearly sales data');
-  }
-};
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await Promise.all([loadMerchantData(), loadSalesData()]);
-    setRefreshing(false);
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2
-    }).format(amount);
-  };
-
-  const getChartData = () => {
-    if (!salesData || salesData.length === 0) {
-      return {
-        labels: ["No Data"],
-        datasets: [{ data: [0] }]
-      };
-    }
-  
-    // Group data by month
-    const monthlyData = {};
-    salesData.forEach(item => {
-      const date = new Date(item.date);
-      const monthKey = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-      
-      if (!monthlyData[monthKey]) {
-        monthlyData[monthKey] = 0;
-      }
-      monthlyData[monthKey] += item.sales;
-    });
-  
-    // Convert to arrays for chart
-    const labels = Object.keys(monthlyData);
-    const data = Object.values(monthlyData);
-  
-    return {
-      labels: labels,
-      datasets: [
-        {
-          data: data,
-          color: (opacity = 1) => `rgba(66, 133, 244, ${opacity})`,
-          strokeWidth: 2
-        }
-      ]
-    };
-  };
-
-  const changeMerchant = () => {
-    navigation.navigate('MerchantLogin');
-  };
-
-  const navigateToInsights = () => {
-    navigation.navigate('Insights', { merchantId: selectedMerchant });
-  };
-
-  const navigateToProducts = () => {
-    navigation.navigate('Products', { merchantId: selectedMerchant });
-  };
-
-  const navigateToSalesReport = () => {
-    navigation.navigate('SalesReport', { merchantId: selectedMerchant });
-  };
-
-  const navigateToChat = () => {
-    navigation.navigate('Chat', { merchantId: selectedMerchant });
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4285F4" />
-        <Text style={styles.loadingText}>Loading merchant data...</Text>
-      </View>
-    );
-  }
+    loadData();
+  }, []);
 
   return (
-    <ScrollView 
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      {/* Merchant Header */}
-      <View style={styles.header}>
-        <View style={styles.merchantInfoContainer}>
-          <Text style={styles.merchantName}>{merchantData?.name || 'Merchant'}</Text>
-          <Text style={styles.merchantId}>ID: {merchantData?.merchant_id || 'Unknown'}</Text>
-          <Text style={styles.joinDate}>Member since: {merchantData?.join_date || 'Unknown'}</Text>
+    <ScrollView style={styles.container}>
+      <View style={styles.assistantCard}>
+        <Image source={require('../assets/assistant.png')} style={styles.assistantIcon} />
+        <View style={styles.bubble}>
+          <Text style={styles.bubbleText}>
+            {summary ? `Your sales peaked at RM ${summary.today_sales} today\nTop item: ${items[0]?.name}` : 'Loading insights...'}
+          </Text>
         </View>
-        <TouchableOpacity style={styles.changeMerchantButton} onPress={changeMerchant}>
-          <Ionicons name="swap-horizontal-outline" size={20} color="white" />
-          <Text style={styles.changeMerchantText}>Change</Text>
-        </TouchableOpacity>
       </View>
 
-      {/* Today's Summary */}
-      <Card style={styles.summaryCard}>
-        <Card.Title title="Today's Sales" />
-        <Card.Content>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{formatCurrency(merchantData?.today_sales || 0)}</Text>
-              <Text style={styles.statLabel}>Revenue</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{merchantData?.today_orders || 0}</Text>
-              <Text style={styles.statLabel}>Orders</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>
-                {merchantData?.today_orders > 0 
-                  ? formatCurrency(merchantData.today_sales / merchantData.today_orders) 
-                  : '$0.00'}
-              </Text>
-              <Text style={styles.statLabel}>Avg. Order</Text>
-            </View>
-          </View>
-        </Card.Content>
-      </Card>
+      {summary && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Today’s Revenue</Text>
+          <Text style={styles.cardValue}>RM {summary.today_sales.toFixed(2)}</Text>
+          <Text style={styles.subtext}>{summary.today_orders} orders today</Text>
+        </View>
+      )}
 
-      {/* Weekly Sales Chart */}
-      <Card style={styles.chartCard}>
-        <Card.Title title= "Yearly Sales"/>
-        <Card.Content>
-          {salesError ? (
-            <Text style={styles.errorText}>{salesError}</Text>
-          ) : salesData.length > 0 ? (
-            <LineChart
-              data={getChartData()}
-              width={screenWidth - 40}
-              height={220}
-              chartConfig={{
-                backgroundColor: '#ffffff',
-                backgroundGradientFrom: '#ffffff',
-                backgroundGradientTo: '#ffffff',
-                decimalPlaces: 0,
-                color: (opacity = 1) => `rgba(66, 133, 244, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                style: {
-                  borderRadius: 16
-                },
-                propsForDots: {
-                  r: '6',
-                  strokeWidth: '2',
-                  stroke: '#4285F4'
-                }
-              }}
-              bezier
-              style={{
-                marginVertical: 8,
-                borderRadius: 16
-              }}
-            />
-          ) : (
-            <ActivityIndicator size="large" color="#4285F4" />
-          )}
-        </Card.Content>
-      </Card>
+      {salesTrend.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Sales Trend (Last 7 Days)</Text>
+          <LineChart
+            data={{
+              labels: salesTrend.map(d => d.date.slice(5)),
+              datasets: [{
+                data: salesTrend.map(d => d.sales)
+              }]
+            }}
+            width={screenWidth - 40}
+            height={180}
+            chartConfig={{
+              backgroundColor: '#00b14f',
+              backgroundGradientFrom: '#e9ffe8',
+              backgroundGradientTo: '#e9ffe8',
+              color: () => '#00b14f',
+              labelColor: () => '#333',
+            }}
+            bezier
+            style={styles.chartStyle}
+          />
+        </View>
+      )}
 
-      {/* Overall Statistics */}
-      <Card style={styles.statsCard}>
-        <Card.Title title="Overall Statistics" />
-        <Card.Content>
-          <View style={styles.statsGrid}>
-            <View style={styles.statGridItem}>
-              <Text style={styles.statGridValue}>{formatCurrency(merchantData?.total_sales || 0)}</Text>
-              <Text style={styles.statGridLabel}>Total Sales</Text>
+      {items.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Top-Selling Items</Text>
+          {items.map(item => (
+            <View key={item.item_id} style={styles.itemRow}>
+              <Text style={styles.itemName}>{item.name}</Text>
+              <Text style={styles.itemValue}>RM {item.revenue.toFixed(2)}</Text>
             </View>
-            <View style={styles.statGridItem}>
-              <Text style={styles.statGridValue}>{merchantData?.transaction_count || 0}</Text>
-              <Text style={styles.statGridLabel}>Total Orders</Text>
-            </View>
-            <View style={styles.statGridItem}>
-              <Text style={styles.statGridValue}>{merchantData?.active_days || 0}</Text>
-              <Text style={styles.statGridLabel}>Active Days</Text>
-            </View>
-            <View style={styles.statGridItem}>
-              <Text style={styles.statGridValue}>{formatCurrency(merchantData?.avg_transaction_value || 0)}</Text>
-              <Text style={styles.statGridLabel}>Avg. Order Value</Text>
-            </View>
-          </View>
-        </Card.Content>
-      </Card>
+          ))}
+        </View>
+      )}
 
-      {/* Quick Actions */}
-      <Card style={styles.actionsCard}>
-        <Card.Title title="Quick Actions" />
-        <Card.Content>
-          <View style={styles.actionButtonsContainer}>
-            <TouchableOpacity 
-              style={styles.actionButton} 
-              onPress={navigateToSalesReport}
-            >
-              <Ionicons name="bar-chart-outline" size={24} color="#4285F4" />
-              <Text style={styles.actionButtonText}>Sales Report</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.actionButton} 
-              onPress={navigateToInsights}
-            >
-              <Ionicons name="bulb-outline" size={24} color="#4285F4" />
-              <Text style={styles.actionButtonText}>Insights</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.actionButton} 
-              onPress={navigateToProducts}
-            >
-              <Ionicons name="fast-food-outline" size={24} color="#4285F4" />
-              <Text style={styles.actionButtonText}>Products</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.actionButton} 
-              onPress={navigateToChat}
-            >
-              <Ionicons name="chatbubble-ellipses-outline" size={24} color="#4285F4" />
-              <Text style={styles.actionButtonText}>Assistant</Text>
-            </TouchableOpacity>
-          </View>
-        </Card.Content>
-      </Card>
+      <TouchableOpacity style={styles.askBtn}>
+        <Text style={styles.askBtnText}>Ask your assistant</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#555',
-  },
-  header: {
-    backgroundColor: '#4285F4',
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  merchantInfoContainer: {
-    flex: 1,
-  },
-  merchantName: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  merchantId: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 2,
-  },
-  joinDate: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginTop: 2,
-  },
-  changeMerchantButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-  },
-  changeMerchantText: {
-    color: 'white',
-    marginLeft: 4,
-    fontSize: 12,
-  },
-  summaryCard: {
-    margin: 10,
-    elevation: 4,
-  },
-  chartCard: {
-    margin: 10,
-    elevation: 4,
-  },
-  statsCard: {
-    margin: 10,
-    elevation: 4,
-  },
-  actionsCard: {
-    margin: 10,
-    elevation: 4,
-    marginBottom: 20,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: 10,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#4285F4',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  statGridItem: {
-    width: '48%',
-    backgroundColor: '#f9f9f9',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  statGridValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#4285F4',
-    marginBottom: 4,
-  },
-  statGridLabel: {
-    fontSize: 12,
-    color: '#666',
-  },
-  actionButtonsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  actionButton: {
-    width: '48%',
-    backgroundColor: '#f0f7ff',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  actionButtonText: {
-    color: '#4285F4',
-    marginTop: 8,
-    fontWeight: '500',
-  },
-  errorText: {
-    color: 'red',
-    textAlign: 'center',
-    marginVertical: 10,
-  }
+  container: { backgroundColor: '#f9f9f9', padding: 20 },
+  assistantCard: { flexDirection: 'row', marginBottom: 20, alignItems: 'center' },
+  assistantIcon: { width: 64, height: 64, marginRight: 10 },
+  bubble: { flex: 1, backgroundColor: '#e1fce9', borderRadius: 12, padding: 10 },
+  bubbleText: { color: '#007e3a', fontSize: 14 },
+  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, shadowColor: '#ccc', shadowOpacity: 0.2, shadowRadius: 4 },
+  cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+  cardValue: { fontSize: 28, fontWeight: 'bold', color: '#00b14f', marginVertical: 4 },
+  subtext: { fontSize: 13, color: '#666' },
+  chartStyle: { borderRadius: 12, marginTop: 10 },
+  itemRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
+  itemName: { fontSize: 15, color: '#333' },
+  itemValue: { fontSize: 15, color: '#00b14f' },
+  askBtn: { backgroundColor: '#00b14f', borderRadius: 30, paddingVertical: 12, alignItems: 'center', marginTop: 10 },
+  askBtnText: { color: '#fff', fontWeight: 'bold' }
 });
-
-export default HomeScreen;
