@@ -13,16 +13,123 @@ export default function HomeScreen({ route }) {
   const [salesTrend, setSalesTrend] = useState([]);
 
   useEffect(() => {
-    async function loadData() {
-      const s = await fetchData(`/merchant/${merchantId}/summary`);
-      const i = await fetchData(`/merchant/${merchantId}/items/performance?days=30`);
-      const t = await fetchData(`/merchant/${merchantId}/sales/daily?days=7`);
-      if (s) setSummary(s);
-      if (i) setItems(i.items.slice(0, 3));
-      if (t) setSalesTrend(t);
+    // Only load data if we have a selected merchant
+    if (selectedMerchant) {
+      loadMerchantData();
+      loadSalesData();
+    } else {
+      // If no merchant is selected, redirect to login screen
+      navigation.replace('MerchantLogin');
     }
-    loadData();
-  }, []);
+  }, [selectedMerchant]);
+
+  const loadMerchantData = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API_URL}/api/merchant/${selectedMerchant}/summary`);
+      setMerchantData(response.data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching merchant data:', error);
+      setLoading(false);
+      Alert.alert(
+        'Error',
+        'Could not load merchant data. Please try again later.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const loadSalesData = async () => {
+    try {
+      // Use the /api prefix in the URL to match the backend route definition
+      const response = await axios.get(`${API_URL}/api/merchant/${selectedMerchant}/sales/daily?days=30`);
+      setSalesData(response.data);
+      setSalesError(null);
+    } catch (error) {
+      console.error('Error fetching sales data:', error);
+      setSalesError('Could not load sales data');
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([loadMerchantData(), loadSalesData()]);
+    setRefreshing(false);
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2
+    }).format(amount);
+  };
+
+  const getChartData = () => {
+    if (!salesData || salesData.length === 0) {
+      return {
+        labels: ["No Data"],
+        datasets: [{ data: [0] }]
+      };
+    }
+  
+    // Group data by month
+    const monthlyData = {};
+    salesData.forEach(item => {
+      const date = new Date(item.date);
+      const monthKey = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = 0;
+      }
+      monthlyData[monthKey] += item.sales;
+    });
+  
+    // Convert to arrays for chart
+    const labels = Object.keys(monthlyData);
+    const data = Object.values(monthlyData);
+  
+    return {
+      labels: labels,
+      datasets: [
+        {
+          data: data,
+          color: (opacity = 1) => `rgba(66, 133, 244, ${opacity})`,
+          strokeWidth: 2
+        }
+      ]
+    };
+  };
+
+  const changeMerchant = () => {
+    navigation.navigate('MerchantLogin');
+  };
+
+  const navigateToInsights = () => {
+    navigation.navigate('Insights', { merchantId: selectedMerchant });
+  };
+
+  const navigateToProducts = () => {
+    navigation.navigate('Products', { merchantId: selectedMerchant });
+  };
+
+  const navigateToSalesReport = () => {
+    navigation.navigate('SalesReport', { merchantId: selectedMerchant });
+  };
+
+  const navigateToChat = () => {
+    navigation.navigate('Chat', { merchantId: selectedMerchant });
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4285F4" />
+        <Text style={styles.loadingText}>Loading merchant data...</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
@@ -35,54 +142,134 @@ export default function HomeScreen({ route }) {
         </View>
       </View>
 
-      {summary && (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Today’s Revenue</Text>
-          <Text style={styles.cardValue}>RM {summary.today_sales.toFixed(2)}</Text>
-          <Text style={styles.subtext}>{summary.today_orders} orders today</Text>
-        </View>
-      )}
-
-      {salesTrend.length > 0 && (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Sales Trend (Last 7 Days)</Text>
-          <LineChart
-            data={{
-              labels: salesTrend.map(d => d.date.slice(5)),
-              datasets: [{
-                data: salesTrend.map(d => d.sales)
-              }]
-            }}
-            width={screenWidth - 40}
-            height={180}
-            chartConfig={{
-              backgroundColor: '#00b14f',
-              backgroundGradientFrom: '#e9ffe8',
-              backgroundGradientTo: '#e9ffe8',
-              color: () => '#00b14f',
-              labelColor: () => '#333',
-            }}
-            bezier
-            style={styles.chartStyle}
-          />
-        </View>
-      )}
-
-      {items.length > 0 && (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Top-Selling Items</Text>
-          {items.map(item => (
-            <View key={item.item_id} style={styles.itemRow}>
-              <Text style={styles.itemName}>{item.name}</Text>
-              <Text style={styles.itemValue}>RM {item.revenue.toFixed(2)}</Text>
+      {/* Monthly Performance Summary (replacing Today's summary) */}
+      <Card style={styles.summaryCard}>
+        <Card.Title title="Monthly Performance" />
+        <Card.Content>
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{formatCurrency(merchantData?.total_sales || 0)}</Text>
+              <Text style={styles.statLabel}>Total Revenue</Text>
             </View>
-          ))}
-        </View>
-      )}
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{merchantData?.transaction_count || 0}</Text>
+              <Text style={styles.statLabel}>Orders</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>
+                {merchantData?.transaction_count > 0 
+                  ? formatCurrency(merchantData.total_sales / merchantData.transaction_count) 
+                  : '$0.00'}
+              </Text>
+              <Text style={styles.statLabel}>Avg. Order</Text>
+            </View>
+          </View>
+        </Card.Content>
+      </Card>
 
-      <TouchableOpacity style={styles.askBtn}>
-        <Text style={styles.askBtnText}>Ask your assistant</Text>
-      </TouchableOpacity>
+      {/* Monthly Sales Chart */}
+      <Card style={styles.chartCard}>
+        <Card.Title title="Monthly Sales"/>
+        <Card.Content>
+          {salesError ? (
+            <Text style={styles.errorText}>{salesError}</Text>
+          ) : salesData.length > 0 ? (
+            <LineChart
+              data={getChartData()}
+              width={screenWidth - 40}
+              height={220}
+              chartConfig={{
+                backgroundColor: '#ffffff',
+                backgroundGradientFrom: '#ffffff',
+                backgroundGradientTo: '#ffffff',
+                decimalPlaces: 0,
+                color: (opacity = 1) => `rgba(66, 133, 244, ${opacity})`,
+                labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                style: {
+                  borderRadius: 16
+                },
+                propsForDots: {
+                  r: '6',
+                  strokeWidth: '2',
+                  stroke: '#4285F4'
+                }
+              }}
+              bezier
+              style={{
+                marginVertical: 8,
+                borderRadius: 16
+              }}
+            />
+          ) : (
+            <ActivityIndicator size="large" color="#4285F4" />
+          )}
+        </Card.Content>
+      </Card>
+
+      {/* Overall Statistics */}
+      <Card style={styles.statsCard}>
+        <Card.Title title="Business Metrics" />
+        <Card.Content>
+          <View style={styles.statsGrid}>
+            <View style={styles.statGridItem}>
+              <Text style={styles.statGridValue}>{formatCurrency(merchantData?.avg_transaction_value || 0)}</Text>
+              <Text style={styles.statGridLabel}>Avg. Order Value</Text>
+            </View>
+            <View style={styles.statGridItem}>
+              <Text style={styles.statGridValue}>{merchantData?.active_days || 0}</Text>
+              <Text style={styles.statGridLabel}>Active Days</Text>
+            </View>
+            <View style={styles.statGridItem}>
+              <Text style={styles.statGridValue}>{formatCurrency((merchantData?.total_sales || 0) / (merchantData?.active_days || 1))}</Text>
+              <Text style={styles.statGridLabel}>Avg. Daily Sales</Text>
+            </View>
+            <View style={styles.statGridItem}>
+              <Text style={styles.statGridValue}>{formatCurrency((merchantData?.transaction_count || 0) / (merchantData?.active_days || 1))}</Text>
+              <Text style={styles.statGridLabel}>Orders per Day</Text>
+            </View>
+          </View>
+        </Card.Content>
+      </Card>
+
+      {/* Quick Actions */}
+      <Card style={styles.actionsCard}>
+        <Card.Title title="Quick Actions" />
+        <Card.Content>
+          <View style={styles.actionButtonsContainer}>
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={navigateToSalesReport}
+            >
+              <Ionicons name="bar-chart-outline" size={24} color="#4285F4" />
+              <Text style={styles.actionButtonText}>Sales Report</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={navigateToInsights}
+            >
+              <Ionicons name="bulb-outline" size={24} color="#4285F4" />
+              <Text style={styles.actionButtonText}>Insights</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={navigateToProducts}
+            >
+              <Ionicons name="fast-food-outline" size={24} color="#4285F4" />
+              <Text style={styles.actionButtonText}>Products</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={navigateToChat}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={24} color="#4285F4" />
+              <Text style={styles.actionButtonText}>Assistant</Text>
+            </TouchableOpacity>
+          </View>
+        </Card.Content>
+      </Card>
     </ScrollView>
   );
 }
