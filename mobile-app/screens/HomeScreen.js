@@ -7,18 +7,21 @@ import {
   TouchableOpacity, 
   RefreshControl,
   ActivityIndicator,
-  Alert
+  Alert,
+  Image
 } from 'react-native';
 import { Card } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome5 } from '@expo/vector-icons';
 import axios from 'axios';
 import { Dimensions } from 'react-native';
-import { LineChart } from 'react-native-chart-kit';
+import { LineChart, BarChart } from 'react-native-chart-kit';
+import { useTheme } from '../contexts/ThemeContext';
 
-const API_URL = 'http://192.168.68.114:5000'; // Removed the /api suffix
+const API_URL = 'http://192.168.68.114:5000';
 
 const HomeScreen = ({ navigation, route }) => {
-  // Get merchant ID from route params or use null
+  const theme = useTheme();
   const { merchantId } = route.params || {};
   
   const [loading, setLoading] = useState(true);
@@ -31,19 +34,16 @@ const HomeScreen = ({ navigation, route }) => {
   const screenWidth = Dimensions.get('window').width;
 
   useEffect(() => {
-    // If we have a merchantId from navigation params, update selected merchant
     if (route.params?.merchantId) {
       setSelectedMerchant(route.params.merchantId);
     }
   }, [route.params?.merchantId]);
 
   useEffect(() => {
-    // Only load data if we have a selected merchant
     if (selectedMerchant) {
       loadMerchantData();
       loadSalesData();
     } else {
-      // If no merchant is selected, redirect to login screen
       navigation.replace('MerchantLogin');
     }
   }, [selectedMerchant]);
@@ -67,7 +67,6 @@ const HomeScreen = ({ navigation, route }) => {
 
   const loadSalesData = async () => {
     try {
-      // Use the /api prefix in the URL to match the backend route definition
       const response = await axios.get(`${API_URL}/api/merchant/${selectedMerchant}/sales/daily?days=30`);
       setSalesData(response.data);
       setSalesError(null);
@@ -91,36 +90,18 @@ const HomeScreen = ({ navigation, route }) => {
     }).format(amount);
   };
 
-  const getChartData = () => {
-    if (!salesData || salesData.length === 0) {
-      return {
-        labels: ["No Data"],
-        datasets: [{ data: [0] }]
-      };
-    }
-  
-    // Group data by month
-    const monthlyData = {};
-    salesData.forEach(item => {
-      const date = new Date(item.date);
-      const monthKey = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-      
-      if (!monthlyData[monthKey]) {
-        monthlyData[monthKey] = 0;
-      }
-      monthlyData[monthKey] += item.sales;
-    });
-  
-    // Convert to arrays for chart
-    const labels = Object.keys(monthlyData);
-    const data = Object.values(monthlyData);
-  
+  // Mock yearly sales data instead of monthly
+  const getYearlySalesData = () => {
+    // Create mock data for yearly visualization
     return {
-      labels: labels,
+      labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
       datasets: [
         {
-          data: data,
-          color: (opacity = 1) => `rgba(66, 133, 244, ${opacity})`,
+          data: [
+            25000, 28000, 32000, 30000, 35000, 42000, 
+            38000, 42000, 48000, 50000, 55000, 60000
+          ],
+          color: (opacity = 1) => `rgba(0, 177, 79, ${opacity})`, // Grab green
           strokeWidth: 2
         }
       ]
@@ -150,7 +131,7 @@ const HomeScreen = ({ navigation, route }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4285F4" />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
         <Text style={styles.loadingText}>Loading merchant data...</Text>
       </View>
     );
@@ -158,41 +139,52 @@ const HomeScreen = ({ navigation, route }) => {
 
   return (
     <ScrollView 
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.colors.surface }]}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        <RefreshControl 
+          refreshing={refreshing} 
+          onRefresh={onRefresh} 
+          colors={[theme.colors.primary]} 
+        />
       }
     >
       {/* Merchant Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
         <View style={styles.merchantInfoContainer}>
           <Text style={styles.merchantName}>{merchantData?.name || 'Merchant'}</Text>
           <Text style={styles.merchantId}>ID: {merchantData?.merchant_id || 'Unknown'}</Text>
           <Text style={styles.joinDate}>Member since: {merchantData?.join_date || 'Unknown'}</Text>
         </View>
-        <TouchableOpacity style={styles.changeMerchantButton} onPress={changeMerchant}>
+        <TouchableOpacity 
+          style={styles.changeMerchantButton} 
+          onPress={changeMerchant}
+        >
           <Ionicons name="swap-horizontal-outline" size={20} color="white" />
           <Text style={styles.changeMerchantText}>Change</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Monthly Performance Summary (replacing Today's summary) */}
+      {/* Today's Performance Summary */}
       <Card style={styles.summaryCard}>
-        <Card.Title title="Monthly Performance" />
         <Card.Content>
+          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Today's Performance</Text>
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{formatCurrency(merchantData?.total_sales || 0)}</Text>
-              <Text style={styles.statLabel}>Total Revenue</Text>
+              <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+                {formatCurrency(merchantData?.today_sales || 0)}
+              </Text>
+              <Text style={styles.statLabel}>Today's Sales</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{merchantData?.transaction_count || 0}</Text>
+              <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+                {merchantData?.today_orders || 0}
+              </Text>
               <Text style={styles.statLabel}>Orders</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>
-                {merchantData?.transaction_count > 0 
-                  ? formatCurrency(merchantData.total_sales / merchantData.transaction_count) 
+              <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+                {merchantData?.today_orders > 0 
+                  ? formatCurrency(merchantData.today_sales / merchantData.today_orders) 
                   : '$0.00'}
               </Text>
               <Text style={styles.statLabel}>Avg. Order</Text>
@@ -201,31 +193,31 @@ const HomeScreen = ({ navigation, route }) => {
         </Card.Content>
       </Card>
 
-      {/* Monthly Sales Chart */}
+      {/* Yearly Sales Chart */}
       <Card style={styles.chartCard}>
-        <Card.Title title="Monthly Sales"/>
         <Card.Content>
-          {salesError ? (
-            <Text style={styles.errorText}>{salesError}</Text>
-          ) : salesData.length > 0 ? (
+          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>2025 Sales Performance</Text>
+          <View style={styles.chartContainer}>
             <LineChart
-              data={getChartData()}
+              data={getYearlySalesData()}
               width={screenWidth - 40}
               height={220}
+              yAxisLabel="$"
+              yAxisSuffix=""
               chartConfig={{
-                backgroundColor: '#ffffff',
-                backgroundGradientFrom: '#ffffff',
-                backgroundGradientTo: '#ffffff',
+                backgroundColor: theme.colors.background,
+                backgroundGradientFrom: theme.colors.background,
+                backgroundGradientTo: theme.colors.background,
                 decimalPlaces: 0,
-                color: (opacity = 1) => `rgba(66, 133, 244, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                color: (opacity = 1) => `rgba(0, 177, 79, ${opacity})`,
+                labelColor: (opacity = 1) => `rgba(28, 28, 28, ${opacity})`,
                 style: {
                   borderRadius: 16
                 },
                 propsForDots: {
-                  r: '6',
+                  r: '4',
                   strokeWidth: '2',
-                  stroke: '#4285F4'
+                  stroke: theme.colors.primary
                 }
               }}
               bezier
@@ -234,31 +226,48 @@ const HomeScreen = ({ navigation, route }) => {
                 borderRadius: 16
               }}
             />
-          ) : (
-            <ActivityIndicator size="large" color="#4285F4" />
-          )}
+          </View>
+          <TouchableOpacity 
+            style={[styles.viewDetailsButton, { backgroundColor: theme.colors.primary }]}
+            onPress={navigateToSalesReport}
+          >
+            <Text style={styles.viewDetailsText}>View Full Report</Text>
+            <Ionicons name="arrow-forward" size={16} color="white" />
+          </TouchableOpacity>
         </Card.Content>
       </Card>
 
-      {/* Overall Statistics */}
+      {/* Business Metrics */}
       <Card style={styles.statsCard}>
-        <Card.Title title="Business Metrics" />
         <Card.Content>
+          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Business Metrics</Text>
           <View style={styles.statsGrid}>
-            <View style={styles.statGridItem}>
-              <Text style={styles.statGridValue}>{formatCurrency(merchantData?.avg_transaction_value || 0)}</Text>
+            <View style={[styles.statGridItem, { backgroundColor: theme.colors.background }]}>
+              <FontAwesome5 name="dollar-sign" size={18} color={theme.colors.primary} style={styles.statIcon} />
+              <Text style={[styles.statGridValue, { color: theme.colors.primary }]}>
+                {formatCurrency(merchantData?.avg_transaction_value || 0)}
+              </Text>
               <Text style={styles.statGridLabel}>Avg. Order Value</Text>
             </View>
-            <View style={styles.statGridItem}>
-              <Text style={styles.statGridValue}>{merchantData?.active_days || 0}</Text>
+            <View style={[styles.statGridItem, { backgroundColor: theme.colors.background }]}>
+              <FontAwesome5 name="calendar-check" size={18} color={theme.colors.primary} style={styles.statIcon} />
+              <Text style={[styles.statGridValue, { color: theme.colors.primary }]}>
+                {merchantData?.active_days || 0}
+              </Text>
               <Text style={styles.statGridLabel}>Active Days</Text>
             </View>
-            <View style={styles.statGridItem}>
-              <Text style={styles.statGridValue}>{formatCurrency((merchantData?.total_sales || 0) / (merchantData?.active_days || 1))}</Text>
-              <Text style={styles.statGridLabel}>Avg. Daily Sales</Text>
+            <View style={[styles.statGridItem, { backgroundColor: theme.colors.background }]}>
+              <FontAwesome5 name="chart-line" size={18} color={theme.colors.primary} style={styles.statIcon} />
+              <Text style={[styles.statGridValue, { color: theme.colors.primary }]}>
+                {formatCurrency((merchantData?.total_sales || 0) / (merchantData?.active_days || 1))}
+              </Text>
+              <Text style={styles.statGridLabel}>Daily Sales Avg</Text>
             </View>
-            <View style={styles.statGridItem}>
-              <Text style={styles.statGridValue}>{formatCurrency((merchantData?.transaction_count || 0) / (merchantData?.active_days || 1))}</Text>
+            <View style={[styles.statGridItem, { backgroundColor: theme.colors.background }]}>
+              <FontAwesome5 name="shopping-bag" size={18} color={theme.colors.primary} style={styles.statIcon} />
+              <Text style={[styles.statGridValue, { color: theme.colors.primary }]}>
+                {((merchantData?.transaction_count || 0) / (merchantData?.active_days || 1)).toFixed(1)}
+              </Text>
               <Text style={styles.statGridLabel}>Orders per Day</Text>
             </View>
           </View>
@@ -267,40 +276,60 @@ const HomeScreen = ({ navigation, route }) => {
 
       {/* Quick Actions */}
       <Card style={styles.actionsCard}>
-        <Card.Title title="Quick Actions" />
         <Card.Content>
+          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Quick Actions</Text>
           <View style={styles.actionButtonsContainer}>
             <TouchableOpacity 
-              style={styles.actionButton} 
+              style={[styles.actionButton, { backgroundColor: `${theme.colors.primary}10` }]} 
               onPress={navigateToSalesReport}
             >
-              <Ionicons name="bar-chart-outline" size={24} color="#4285F4" />
-              <Text style={styles.actionButtonText}>Sales Report</Text>
+              <Ionicons name="bar-chart-outline" size={24} color={theme.colors.primary} />
+              <Text style={[styles.actionButtonText, { color: theme.colors.primary }]}>Sales Report</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.actionButton} 
+              style={[styles.actionButton, { backgroundColor: `${theme.colors.primary}10` }]} 
               onPress={navigateToInsights}
             >
-              <Ionicons name="bulb-outline" size={24} color="#4285F4" />
-              <Text style={styles.actionButtonText}>Insights</Text>
+              <Ionicons name="bulb-outline" size={24} color={theme.colors.primary} />
+              <Text style={[styles.actionButtonText, { color: theme.colors.primary }]}>Insights</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.actionButton} 
+              style={[styles.actionButton, { backgroundColor: `${theme.colors.primary}10` }]} 
               onPress={navigateToProducts}
             >
-              <Ionicons name="fast-food-outline" size={24} color="#4285F4" />
-              <Text style={styles.actionButtonText}>Products</Text>
+              <Ionicons name="fast-food-outline" size={24} color={theme.colors.primary} />
+              <Text style={[styles.actionButtonText, { color: theme.colors.primary }]}>Menu Items</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.actionButton} 
+              style={[styles.actionButton, { backgroundColor: `${theme.colors.primary}10` }]} 
               onPress={navigateToChat}
             >
-              <Ionicons name="chatbubble-ellipses-outline" size={24} color="#4285F4" />
-              <Text style={styles.actionButtonText}>Assistant</Text>
+              <Ionicons name="chatbubble-ellipses-outline" size={24} color={theme.colors.primary} />
+              <Text style={[styles.actionButtonText, { color: theme.colors.primary }]}>Grab Assistant</Text>
             </TouchableOpacity>
+          </View>
+        </Card.Content>
+      </Card>
+
+      {/* Grab Promo Banner */}
+      <Card style={styles.promoCard}>
+        <Card.Content style={styles.promoContent}>
+          <View style={styles.promoTextContainer}>
+            <Text style={styles.promoTitle}>Increase your visibility</Text>
+            <Text style={styles.promoDescription}>
+              Join Grab Preferred Merchants Program and boost your sales by 30%
+            </Text>
+            <TouchableOpacity 
+              style={[styles.promoButton, { backgroundColor: theme.colors.secondary }]}
+            >
+              <Text style={styles.promoButtonText}>Learn More</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.promoImageContainer}>
+            <FontAwesome5 name="store" size={50} color={theme.colors.primary} />
           </View>
         </Card.Content>
       </Card>
@@ -311,13 +340,11 @@ const HomeScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
   },
   loadingText: {
     marginTop: 10,
@@ -325,7 +352,6 @@ const styles = StyleSheet.create({
     color: '#555',
   },
   header: {
-    backgroundColor: '#4285F4',
     padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
@@ -362,22 +388,35 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontSize: 12,
   },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
   summaryCard: {
     margin: 10,
-    elevation: 4,
+    elevation: 2,
+    borderRadius: 12,
   },
   chartCard: {
     margin: 10,
-    elevation: 4,
+    elevation: 2,
+    borderRadius: 12,
+    paddingVertical: 10,
+  },
+  chartContainer: {
+    alignItems: 'center',
+    marginVertical: 10,
   },
   statsCard: {
     margin: 10,
-    elevation: 4,
+    elevation: 2,
+    borderRadius: 12,
   },
   actionsCard: {
     margin: 10,
-    elevation: 4,
-    marginBottom: 20,
+    elevation: 2,
+    borderRadius: 12,
   },
   statsRow: {
     flexDirection: 'row',
@@ -391,7 +430,6 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#4285F4',
   },
   statLabel: {
     fontSize: 12,
@@ -405,21 +443,31 @@ const styles = StyleSheet.create({
   },
   statGridItem: {
     width: '48%',
-    backgroundColor: '#f9f9f9',
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 12,
     alignItems: 'center',
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.18,
+    shadowRadius: 1.0,
+    elevation: 1,
+  },
+  statIcon: {
+    marginBottom: 10,
   },
   statGridValue: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#4285F4',
     marginBottom: 4,
   },
   statGridLabel: {
     fontSize: 12,
     color: '#666',
+    textAlign: 'center',
   },
   actionButtonsContainer: {
     flexDirection: 'row',
@@ -428,14 +476,12 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     width: '48%',
-    backgroundColor: '#f0f7ff',
-    borderRadius: 8,
-    padding: 16,
+    borderRadius: 12,
+    padding: 20,
     alignItems: 'center',
     marginBottom: 12,
   },
   actionButtonText: {
-    color: '#4285F4',
     marginTop: 8,
     fontWeight: '500',
   },
@@ -443,6 +489,59 @@ const styles = StyleSheet.create({
     color: 'red',
     textAlign: 'center',
     marginVertical: 10,
+  },
+  viewDetailsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  viewDetailsText: {
+    color: 'white',
+    fontWeight: '500',
+    marginRight: 8,
+  },
+  promoCard: {
+    margin: 10,
+    marginBottom: 20,
+    borderRadius: 12,
+    elevation: 2,
+  },
+  promoContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  promoTextContainer: {
+    flex: 3,
+  },
+  promoImageContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  promoTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  promoDescription: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 12,
+  },
+  promoButton: {
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignSelf: 'flex-start',
+  },
+  promoButtonText: {
+    color: 'white',
+    fontWeight: '500',
+    fontSize: 12,
   }
 });
 

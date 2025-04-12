@@ -8,14 +8,17 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  Image
 } from 'react-native';
 import { Card } from 'react-native-paper';
 import axios from 'axios';
+import { useTheme } from '../contexts/ThemeContext';
 
 const API_URL = 'http://192.168.68.114:5000';
 
 const MerchantLoginScreen = ({ navigation }) => {
+  const theme = useTheme();
   const [merchantId, setMerchantId] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -36,7 +39,10 @@ const MerchantLoginScreen = ({ navigation }) => {
       setLoading(false);
       
       // Navigate to HomeScreen with the merchant ID
-      navigation.navigate('Home', { merchantId: merchantId });
+      navigation.navigate('Home', { 
+        merchantId: merchantId,
+        merchantName: response.data?.name || 'Merchant'
+      });
       
     } catch (error) {
       setLoading(false);
@@ -77,25 +83,36 @@ const MerchantLoginScreen = ({ navigation }) => {
   return (
     <KeyboardAvoidingView 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.colors.surface }]}
     >
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Merchant App</Text>
+      </View>
+      
       <View style={styles.content}>
         <Card style={styles.card}>
-          <Card.Title 
-            title="Merchant Assistant" 
-            subtitle="Please enter your Merchant ID to continue" 
-          />
           <Card.Content>
+            <View style={styles.logoContainer}>
+              <Image 
+                source={{ uri: '/api/placeholder/80/80' }} 
+                style={styles.logo}
+              />
+            </View>
+            
+            <Text style={styles.title}>Welcome to Grab Merchant</Text>
+            <Text style={styles.subtitle}>Enter your merchant ID to continue</Text>
+            
             <TextInput
-              style={styles.input}
+              style={[styles.input, { borderColor: theme.colors.border }]}
               placeholder="Enter Merchant ID (e.g., M001)"
               value={merchantId}
               onChangeText={setMerchantId}
               autoCapitalize="characters"
+              placeholderTextColor={theme.colors.textLight}
             />
             
             <TouchableOpacity
-              style={styles.button}
+              style={[styles.button, { backgroundColor: theme.colors.primary }]}
               onPress={validateMerchantId}
               disabled={loading}
             >
@@ -111,12 +128,16 @@ const MerchantLoginScreen = ({ navigation }) => {
               onPress={fetchMerchantList}
               disabled={loading}
             >
-              <Text style={styles.secondaryButtonText}>
+              <Text style={[styles.secondaryButtonText, { color: theme.colors.primary }]}>
                 View Available Merchants
               </Text>
             </TouchableOpacity>
           </Card.Content>
         </Card>
+        
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>© 2025 Grab Merchant Services</Text>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -125,7 +146,19 @@ const MerchantLoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F7F7F7',
+  },
+  header: {
+    backgroundColor: '#00B14F', // Grab Green
+    paddingTop: 50,
+    paddingBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
   content: {
     flex: 1,
@@ -135,20 +168,44 @@ const styles = StyleSheet.create({
   card: {
     padding: 10,
     elevation: 4,
+    borderRadius: 12,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  logo: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#00B14F', // Grab Green
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    color: '#1C1C1C',
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    color: '#6E6E6E',
+    marginBottom: 20,
   },
   input: {
     height: 50,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
     marginVertical: 15,
     paddingHorizontal: 15,
     fontSize: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
   },
   button: {
-    backgroundColor: '#4285F4',
-    borderRadius: 5,
+    backgroundColor: '#00B14F', // Grab Green
+    borderRadius: 8,
     padding: 15,
     alignItems: 'center',
     marginTop: 10,
@@ -164,8 +221,16 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   secondaryButtonText: {
-    color: '#4285F4',
+    color: '#00B14F', // Grab Green
     fontSize: 14,
+  },
+  footer: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  footerText: {
+    color: '#6E6E6E',
+    fontSize: 12,
   }
 });
 
