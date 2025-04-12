@@ -1,172 +1,172 @@
-import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  Image,
-  ActivityIndicator,
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TextInput, 
+  TouchableOpacity, 
   Alert,
-  RefreshControl,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator
 } from 'react-native';
+import { Card } from 'react-native-paper';
+import axios from 'axios';
 
-export default function MerchantLoginScreen({ navigation }) {
-  const [merchants, setMerchants] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+const API_URL = 'http://192.168.68.114:5000';
 
-  /**
-   * Fetch the list of merchants from the backend API.
-   * On success, populate merchant list.
-   * On failure, show error alert.
-   */
-  const fetchMerchants = async () => {
+const MerchantLoginScreen = ({ navigation }) => {
+  const [merchantId, setMerchantId] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const validateMerchantId = async () => {
+    // Basic validation
+    if (!merchantId || merchantId.trim() === '') {
+      Alert.alert('Error', 'Please enter a merchant ID');
+      return;
+    }
+
+    setLoading(true);
+    
     try {
-      setLoading(true);
-      const res = await fetch('http://192.168.68.114/api/merchants'); // Update IP for real device if needed
-      const json = await res.json();
-
-      if (json?.merchants?.length > 0) {
-        setMerchants(json.merchants);
-      } else {
-        Alert.alert('No merchants found', 'Make sure your database is properly populated.');
-        setMerchants([]);
-      }
-    } catch (err) {
-      console.error('API Error:', err);
-      Alert.alert('Connection Error', 'Unable to fetch merchant data. Please check your connection.');
-    } finally {
+      // Verify the merchant ID exists
+      const response = await axios.get(`${API_URL}/api/merchant/${merchantId}/summary`);
+      
+      // If we get here, the merchant ID is valid
       setLoading(false);
-      setRefreshing(false);
+      
+      // Navigate to HomeScreen with the merchant ID
+      navigation.navigate('Home', { merchantId: merchantId });
+      
+    } catch (error) {
+      setLoading(false);
+      console.error('Error validating merchant ID:', error);
+      Alert.alert(
+        'Invalid Merchant ID',
+        'The merchant ID you entered was not found. Please check and try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
-  useEffect(() => {
-    fetchMerchants();
-  }, []);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchMerchants();
+  const fetchMerchantList = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API_URL}/api/merchants`);
+      setLoading(false);
+      
+      if (response.data && response.data.merchants && response.data.merchants.length > 0) {
+        // Show merchant selection dialog
+        navigation.navigate('MerchantSelect', { 
+          merchants: response.data.merchants 
+        });
+      } else {
+        Alert.alert('No Merchants', 'No merchants were found in the system.');
+      }
+    } catch (error) {
+      setLoading(false);
+      console.error('Error fetching merchant list:', error);
+      Alert.alert(
+        'Error',
+        'Could not fetch the list of merchants. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
-  /**
-   * Renders an individual merchant card.
-   * @param {object} item - Merchant info containing name and ID
-   */
-  const renderMerchant = ({ item }) => (
-    <TouchableOpacity
-      style={styles.merchantCard}
-      onPress={() => navigation.navigate('Home', {
-        merchantId: item.merchant_id,
-        merchantName: item.name // pass name to be used in App.js header
-      })}
-      activeOpacity={0.85}
-    >
-      <Image source={require('../assets/storefront.png')} style={styles.icon} />
-      <View>
-        <Text style={styles.merchantName}>{item.name}</Text>
-        <Text style={styles.merchantId}>ID: {item.merchant_id}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-
   return (
-    <View style={styles.container}>
-      <Image source={require('../assets/grab-logo.png')} style={styles.logo} />
-      <Text style={styles.title}>Welcome to Grab Merchant Assistant</Text>
-      <Text style={styles.subtitle}>Select your merchant account to continue:</Text>
-
-      {loading ? (
-        <ActivityIndicator size="large" color="#00b14f" style={{ marginTop: 40 }} />
-      ) : (
-        <FlatList
-          data={merchants}
-          keyExtractor={(item) => item.merchant_id}
-          renderItem={renderMerchant}
-          contentContainerStyle={{ paddingBottom: 40 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          ListEmptyComponent={() => (
-            <Text style={styles.emptyText}>No merchant accounts found.</Text>
-          )}
-        />
-      )}
-
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>© 2025 • Powered by Grab • UMHackathon</Text>
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
+    >
+      <View style={styles.content}>
+        <Card style={styles.card}>
+          <Card.Title 
+            title="Merchant Assistant" 
+            subtitle="Please enter your Merchant ID to continue" 
+          />
+          <Card.Content>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter Merchant ID (e.g., M001)"
+              value={merchantId}
+              onChangeText={setMerchantId}
+              autoCapitalize="characters"
+            />
+            
+            <TouchableOpacity
+              style={styles.button}
+              onPress={validateMerchantId}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Continue</Text>
+              )}
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={fetchMerchantList}
+              disabled={loading}
+            >
+              <Text style={styles.secondaryButtonText}>
+                View Available Merchants
+              </Text>
+            </TouchableOpacity>
+          </Card.Content>
+        </Card>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f4fff4',
+    backgroundColor: '#f5f5f5',
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
     padding: 20,
-    paddingTop: 60,
   },
-  logo: {
-    width: 180,
-    height: 60,
-    resizeMode: 'contain',
-    alignSelf: 'center',
-    marginBottom: 20,
+  card: {
+    padding: 10,
+    elevation: 4,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#00b14f',
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#444',
-    textAlign: 'center',
-    marginBottom: 15,
-  },
-  merchantCard: {
-    flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    padding: 16,
-    marginVertical: 8,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  icon: {
-    width: 48,
-    height: 48,
-    marginRight: 16,
-    tintColor: '#00b14f',
-  },
-  merchantName: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#222',
-  },
-  merchantId: {
-    fontSize: 13,
-    color: '#777',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 12,
-    alignSelf: 'center',
-  },
-  footerText: {
-    fontSize: 12,
-    color: '#888',
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 40,
+  input: {
+    height: 50,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 5,
+    marginVertical: 15,
+    paddingHorizontal: 15,
     fontSize: 16,
-    color: '#999',
+    backgroundColor: '#fff',
   },
+  button: {
+    backgroundColor: '#4285F4',
+    borderRadius: 5,
+    padding: 15,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  secondaryButton: {
+    padding: 15,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  secondaryButtonText: {
+    color: '#4285F4',
+    fontSize: 14,
+  }
 });
+
+export default MerchantLoginScreen;
