@@ -1,268 +1,407 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  FlatList, 
-  KeyboardAvoidingView, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert
+  Keyboard
 } from 'react-native';
+import { Card } from 'react-native-paper';
+import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
+const API_URL = 'http://192.168.68.114:5000';
 
-// API configuration - update to match your Flask server
-const API_URL = 'http://192.168.68.114:5000/api';
-const DEFAULT_MERCHANT_ID = 1; // Default merchant ID for demo
-
-export default function ChatScreen({ navigation, route }) {
-  // Get merchant_id from route params if available, otherwise use default
-  const merchantId = route.params?.merchantId || DEFAULT_MERCHANT_ID;
-  
+const ChatScreen = ({ route, navigation }) => {
+  const { merchantId = 'M001' } = route.params || {};
   const [messages, setMessages] = useState([
     {
       id: '1',
-      text: "Hello! I'm your Grab Merchant Assistant. How can I help you today?",
       sender: 'assistant',
+      text: "Hello! I'm your Merchant Assistant. How can I help you with your business today?",
+      timestamp: new Date()
     }
   ]);
-  const [inputMessage, setInputMessage] = useState('');
+  const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [merchantInfo, setMerchantInfo] = useState(null);
+  const [merchantData, setMerchantData] = useState(null);
+  const [keywordData, setKeywordData] = useState([]);
+  const [isTyping, setIsTyping] = useState(false);
   
   const flatListRef = useRef(null);
 
-  // Fetch merchant summary on component mount
   useEffect(() => {
-    fetchMerchantSummary();
+    loadMerchantData();
+    loadKeywordData();
   }, [merchantId]);
 
-  const fetchMerchantSummary = async () => {
+  const loadMerchantData = async () => {
     try {
-      const response = await axios.get(`${API_URL}/merchant/${merchantId}/summary`);
-      setMerchantInfo(response.data);
-      
-      // Add merchant-specific welcome message
-      if (response.data && response.data.name) {
-        const welcomeMsg = {
-          id: Date.now().toString(),
-          text: `Welcome ${response.data.name}! I can help you check your sales data, transaction history, and more.`,
-          sender: 'assistant',
-        };
-        setMessages(prevMessages => [...prevMessages, welcomeMsg]);
-      }
+      const response = await axios.get(`${API_URL}/api/merchant/${merchantId}/summary`);
+      setMerchantData(response.data);
     } catch (error) {
-      console.error('Error fetching merchant summary:', error);
+      console.error('Error fetching merchant data:', error);
+      // Add error handling as needed
     }
   };
 
-  const handleSend = async () => {
-    if (inputMessage.trim() === '') return;
+  const loadKeywordData = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/merchant/${merchantId}/keywords`);
+      setKeywordData(response.data.keywords || []);
+    } catch (error) {
+      console.error('Error fetching keyword data:', error);
+      // Add error handling as needed
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!inputText.trim()) return;
     
     const userMessage = {
       id: Date.now().toString(),
-      text: inputMessage,
       sender: 'user',
+      text: inputText,
+      timestamp: new Date()
     };
     
     setMessages(prevMessages => [...prevMessages, userMessage]);
-    setInputMessage('');
+    setInputText('');
     setIsLoading(true);
     
-    // Process user message to determine intent
-    const userIntent = determineUserIntent(inputMessage);
+    // Scroll to bottom
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
     
     try {
-      let responseData;
+      // Simulating API call to a chat service or AI endpoint
+      // In a real app, you would connect to your backend or a service like OpenAI
+      simulateTyping();
       
-      switch (userIntent) {
-        case 'summary':
-          responseData = await fetchMerchantSummaryData();
-          break;
-        case 'daily_sales':
-          responseData = await fetchDailySalesData();
-          break;
-        default:
-          // For general inquiries or when intent is not clear
-          responseData = {
-            text: "I can help you with sales summaries, daily sales data, or listing all merchants. What specific information are you looking for?",
-            action: null
-          };
-      }
+      // Process the message based on content
+      await processUserMessage(userMessage.text);
       
-      const assistantMessage = {
-        id: (Date.now() + 1).toString(),
-        text: responseData.text,
-        sender: 'assistant',
-        action: responseData.action
-      };
-      
-      setMessages(prevMessages => [...prevMessages, assistantMessage]);
-      
-      // Handle action if provided
-      if (responseData.action) {
-        handleAction(responseData.action);
-      }
     } catch (error) {
       console.error('Error processing message:', error);
-      const errorMessage = {
-        id: (Date.now() + 1).toString(),
-        text: "Sorry, I'm having trouble retrieving the data right now. Please try again.",
-        sender: 'assistant',
-      };
-      setMessages(prevMessages => [...prevMessages, errorMessage]);
+      addAssistantMessage("I'm sorry, I encountered an error while processing your request. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
-  
-  // Simple intent detection based on keywords
-  const determineUserIntent = (message) => {
-    const lowerMsg = message.toLowerCase();
+
+  // Simulate typing indicator
+  const simulateTyping = () => {
+    setIsTyping(true);
+    setTimeout(() => setIsTyping(false), 1500 + Math.random() * 1000);
+  };
+
+  // Process user message and generate appropriate response
+  const processUserMessage = async (text) => {
+    const lowerText = text.toLowerCase();
     
-    if (lowerMsg.includes('summary') || lowerMsg.includes('overview') || lowerMsg.includes('how am i doing')) {
-      return 'summary';
-    } else if (lowerMsg.includes('daily sales') || lowerMsg.includes('daily revenue') || lowerMsg.includes('sales by day')) {
-      return 'daily_sales';
-    } else if (lowerMsg.includes('list merchants') || lowerMsg.includes('all merchants')) {
-      return 'list_merchants';
+    // Handle sales questions
+    if (lowerText.includes('sales') || lowerText.includes('revenue') || lowerText.includes('earning')) {
+      await handleSalesQuestion();
     }
-    
-    return 'general';
-  };
-  
-  const fetchMerchantSummaryData = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/merchant/${merchantId}/summary`);
-      const data = response.data;
-      
-      return {
-        text: `Here's your summary:\n• Total Sales: $${data.total_sales.toFixed(2)}\n• Transactions: ${data.transaction_count}\n• Active Days: ${data.active_days}\n• Average Order Value: $${data.avg_transaction_value.toFixed(2)}`,
-        action: 'view_sales_report'
-      };
-    } catch (error) {
-      console.error('Error fetching summary data:', error);
-      throw error;
+    // Handle product questions
+    else if (lowerText.includes('product') || lowerText.includes('item') || lowerText.includes('menu')) {
+      await handleProductQuestion();
     }
-  };
-  
-  const fetchDailySalesData = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/merchant/${merchantId}/sales/daily`);
-      const data = response.data;
-      
-      // Get recent days data to show in chat
-      const recentDays = data.slice(-3);
-      let salesText = "Here are your recent daily sales:\n";
-      
-      recentDays.forEach(day => {
-        salesText += `• ${day.date}: $${day.sales.toFixed(2)} (${day.transactions} transactions)\n`;
-      });
-      
-      salesText += "\nWould you like to see the full report?";
-      
-      return {
-        text: salesText,
-        action: 'view_sales_report'
-      };
-    } catch (error) {
-      console.error('Error fetching daily sales:', error);
-      throw error;
+    // Handle keyword questions
+    else if (lowerText.includes('keyword') || lowerText.includes('search term') || lowerText.includes('search query')) {
+      await handleKeywordQuestion();
     }
-  };
-  
-  const handleAction = (action) => {
-    switch (action) {
-      case 'view_sales_report':
-        // Add a small delay before navigation
-        setTimeout(() => navigation.navigate('SalesReport', { merchantId }), 1000);
-        break;
-      case 'view_product_report':
-        setTimeout(() => navigation.navigate('Products', { merchantId }), 1000);
-        break;
-      case 'view_insights':
-        setTimeout(() => navigation.navigate('Insights', { merchantId }), 1000);
-        break;
-      case 'list_merchants':
-        listAllMerchants();
-        break;
-      default:
-        break;
+    // Handle customer questions
+    else if (lowerText.includes('customer') || lowerText.includes('buyer') || lowerText.includes('client')) {
+      await handleCustomerQuestion();
     }
-  };
-  
-  const listAllMerchants = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/merchants`);
-      const merchants = response.data.merchants;
-      
-      let merchantList = "Here are some merchants in our system:\n";
-      merchants.slice(0, 5).forEach(merchant => {
-        merchantList += `• ID ${merchant.merchant_id}: ${merchant.name}\n`;
-      });
-      
-      const listMessage = {
-        id: Date.now().toString(),
-        text: merchantList,
-        sender: 'assistant',
-      };
-      
-      setMessages(prevMessages => [...prevMessages, listMessage]);
-    } catch (error) {
-      console.error('Error listing merchants:', error);
-      const errorMessage = {
-        id: Date.now().toString(),
-        text: "I couldn't retrieve the merchant list. Please try again later.",
-        sender: 'assistant',
-      };
-      setMessages(prevMessages => [...prevMessages, errorMessage]);
+    // Handle help/suggestions
+    else if (lowerText.includes('help') || lowerText.includes('suggest') || lowerText.includes('improve') || lowerText.includes('better')) {
+      await handleHelpQuestion();
+    }
+    // Handle greetings
+    else if (lowerText.includes('hi') || lowerText.includes('hello') || lowerText.includes('hey')) {
+      handleGreeting();
+    }
+    // Default response
+    else {
+      handleDefaultResponse();
     }
   };
 
-  const renderMessage = ({ item }) => (
-    <View style={[
-      styles.messageBubble,
-      item.sender === 'user' ? styles.userBubble : styles.assistantBubble
-    ]}>
-      <Text style={styles.messageText}>{item.text}</Text>
+  const handleSalesQuestion = async () => {
+    try {
+      // Fetch sales metrics for analysis
+      const response = await axios.get(`${API_URL}/api/merchant/${merchantId}/sales/metrics`);
+      const salesData = response.data;
       
-      {item.action && (
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleAction(item.action)}
-        >
-          <Text style={styles.actionButtonText}>
-            {item.action === 'view_sales_report' ? 'View Sales Report' : 
-             item.action === 'view_product_report' ? 'View Products' : 
-             item.action === 'view_insights' ? 'View Insights' : 
-             'View Details'}
+      let message = `Based on your recent sales data:\n\n`;
+      message += `• Total Sales: $${salesData.total_sales.toFixed(2)}\n`;
+      message += `• Total Orders: ${salesData.total_orders}\n`;
+      message += `• Average Order Value: $${salesData.avg_order_value.toFixed(2)}\n\n`;
+      
+      if (salesData.sales_change > 0) {
+        message += `Your sales are up ${salesData.sales_change.toFixed(1)}% compared to the previous period. Keep up the good work! 📈`;
+      } else if (salesData.sales_change < 0) {
+        message += `Your sales are down ${Math.abs(salesData.sales_change).toFixed(1)}% compared to the previous period. Would you like some suggestions to boost sales? 📉`;
+      } else {
+        message += `Your sales are stable compared to the previous period. Would you like some suggestions to grow further? 📊`;
+      }
+      
+      addAssistantMessage(message);
+    } catch (error) {
+      addAssistantMessage("I couldn't retrieve your sales data at the moment. Please try again later.");
+    }
+  };
+
+  const handleProductQuestion = async () => {
+    try {
+      // Fetch product performance data
+      const response = await axios.get(`${API_URL}/api/merchant/${merchantId}/items/performance`);
+      const products = response.data.items || [];
+      
+      if (products.length === 0) {
+        addAssistantMessage("I don't see any product data available. Would you like to add some products?");
+        return;
+      }
+      
+      // Sort by order count
+      products.sort((a, b) => b.order_count - a.order_count);
+      
+      const topProducts = products.slice(0, 3);
+      
+      let message = `Here's info about your top-selling products:\n\n`;
+      
+      topProducts.forEach((product, index) => {
+        message += `${index + 1}. ${product.name}\n`;
+        message += `   • Price: $${product.price.toFixed(2)}\n`;
+        message += `   • Orders: ${product.order_count}\n`;
+        message += `   • Revenue: $${product.revenue.toFixed(2)}\n\n`;
+      });
+      
+      message += `Would you like to see more details about your product performance?`;
+      
+      addAssistantMessage(message);
+    } catch (error) {
+      addAssistantMessage("I couldn't retrieve your product data at the moment. Please try again later.");
+    }
+  };
+
+  const handleKeywordQuestion = async () => {
+    if (keywordData.length === 0) {
+      addAssistantMessage("I don't have keyword data available at the moment. Would you like me to help you track important keywords for your business?");
+      return;
+    }
+    
+    // Sort by conversion rate
+    const sortedKeywords = [...keywordData].sort((a, b) => b.conversion_rate - a.conversion_rate);
+    const topKeywords = sortedKeywords.slice(0, 5);
+    
+    let message = `Here are your top-performing keywords by conversion rate:\n\n`;
+    
+    topKeywords.forEach((keyword, index) => {
+      message += `${index + 1}. "${keyword.keyword}"\n`;
+      message += `   • Views: ${keyword.views}\n`;
+      message += `   • Orders: ${keyword.orders}\n`;
+      message += `   • Conversion Rate: ${keyword.conversion_rate.toFixed(1)}%\n\n`;
+    });
+    
+    message += `These keywords are driving the most conversions. Consider featuring them prominently in your listings.`;
+    
+    addAssistantMessage(message);
+  };
+
+  const handleCustomerQuestion = async () => {
+    try {
+      // Fetch customer insights
+      const response = await axios.get(`${API_URL}/api/merchant/${merchantId}/insights`);
+      const data = response.data;
+      
+      let message = `Here's what I know about your customers:\n\n`;
+      message += `• Total Unique Customers: ${data.customer_metrics.total_unique_customers}\n`;
+      message += `• Repeat Customers: ${data.customer_metrics.repeat_customers}\n`;
+      message += `• Repeat Rate: ${data.customer_metrics.repeat_rate_percent.toFixed(1)}%\n\n`;
+      
+      if (data.customer_metrics.repeat_rate_percent < 20) {
+        message += `Your repeat customer rate is below average. Consider implementing a loyalty program to encourage customers to return.`;
+      } else if (data.customer_metrics.repeat_rate_percent > 40) {
+        message += `You have a strong repeat customer base! Your customers love your products. Consider asking for referrals to grow further.`;
+      } else {
+        message += `Your repeat customer rate is average for the industry. Creating special promotions for previous customers could help increase this rate.`;
+      }
+      
+      addAssistantMessage(message);
+    } catch (error) {
+      addAssistantMessage("I couldn't retrieve customer data at the moment. Please try again later.");
+    }
+  };
+
+  const handleHelpQuestion = async () => {
+    try {
+      // Get sales metrics and insights to provide targeted help
+      const metricsResponse = await axios.get(`${API_URL}/api/merchant/${merchantId}/sales/metrics`);
+      const insightsResponse = await axios.get(`${API_URL}/api/merchant/${merchantId}/insights`);
+      
+      const metrics = metricsResponse.data;
+      const insights = insightsResponse.data;
+      
+      let suggestions = [];
+      
+      // Check sales trend
+      if (metrics.sales_change < 0) {
+        suggestions.push("Your sales are trending downward. Consider running a limited-time promotion to boost orders.");
+      }
+      
+      // Check repeat customer rate
+      if (insights.customer_metrics.repeat_rate_percent < 30) {
+        suggestions.push("Your repeat customer rate is lower than ideal. Think about implementing a loyalty program.");
+      }
+      
+      // Check delivery metrics
+      if (insights.delivery_metrics.avg_preparation_time_min > 10) {
+        suggestions.push("Your preparation time is higher than average. Looking for ways to optimize your preparation process could improve customer satisfaction.");
+      }
+      
+      // If no specific issues found
+      if (suggestions.length === 0) {
+        suggestions.push("Based on your metrics, your business is doing well! To grow further, consider expanding your product line.");
+        suggestions.push("You might also benefit from creating seasonal specials to attract new customers.");
+      }
+      
+      let message = `Here are some suggestions to help your business:\n\n`;
+      suggestions.forEach((suggestion, index) => {
+        message += `${index + 1}. ${suggestion}\n\n`;
+      });
+      
+      message += `Would you like more detailed recommendations for any of these areas?`;
+      
+      addAssistantMessage(message);
+    } catch (error) {
+      // Fallback suggestions if API fails
+      const message = `Here are some general suggestions to improve your business:\n\n` +
+        `1. Regularly review your best and worst-selling items\n\n` +
+        `2. Consider seasonal promotions to boost sales during slower periods\n\n` +
+        `3. Engage with customer feedback to improve your offerings\n\n` +
+        `Would you like more specific advice on any of these areas?`;
+      
+      addAssistantMessage(message);
+    }
+  };
+
+  const handleGreeting = () => {
+    const greetings = [
+      `Hello there! How can I help with your business today?`,
+      `Hi! I'm here to help you analyze your business performance. What would you like to know?`,
+      `Hello! Would you like to see your sales summary, product performance, or customer insights today?`
+    ];
+    
+    const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
+    addAssistantMessage(randomGreeting);
+  };
+
+  const handleDefaultResponse = () => {
+    const responses = [
+      `I can help you with information about your sales, products, customers, and keywords. What would you like to know?`,
+      `I'm not sure I understood that. Would you like to know about your sales performance, product analytics, or customer insights?`,
+      `I can provide insights about your business performance. Try asking about your sales, top products, or customer trends.`
+    ];
+    
+    const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+    addAssistantMessage(randomResponse);
+  };
+
+  const addAssistantMessage = (text) => {
+    const assistantMessage = {
+      id: Date.now().toString(),
+      sender: 'assistant',
+      text: text,
+      timestamp: new Date()
+    };
+    
+    setTimeout(() => {
+      setMessages(prevMessages => [...prevMessages, assistantMessage]);
+      
+      // Scroll to bottom after message is added
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }, 1500); // Delay to make it feel more natural after typing indicator
+  };
+
+  const renderMessage = ({ item }) => {
+    const isUser = item.sender === 'user';
+    
+    return (
+      <View style={[
+        styles.messageContainer,
+        isUser ? styles.userMessageContainer : styles.assistantMessageContainer
+      ]}>
+        <View style={[
+          styles.messageBubble,
+          isUser ? styles.userBubble : styles.assistantBubble
+        ]}>
+          <Text style={[
+            styles.messageText,
+            isUser ? styles.userMessageText : styles.assistantMessageText
+          ]}>
+            {item.text}
           </Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+        </View>
+        <Text style={styles.timestamp}>
+          {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Text>
+      </View>
+    );
+  };
 
-  // Auto scroll to bottom when new messages arrive
-  useEffect(() => {
-    if (flatListRef.current && messages.length > 0) {
-      flatListRef.current.scrollToEnd({ animated: true });
-    }
-  }, [messages]);
+  const renderSuggestions = () => {
+    const suggestions = [
+      "How are my sales doing?",
+      "What are my top products?",
+      "Tell me about my customers",
+      "Any suggestions to improve?"
+    ];
+    
+    return (
+      <View style={styles.suggestionsContainer}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.suggestionsScrollContent}
+        >
+          {suggestions.map((suggestion, index) => (
+            <TouchableOpacity 
+              key={index}
+              style={styles.suggestionChip}
+              onPress={() => {
+                setInputText(suggestion);
+                setTimeout(() => sendMessage(), 100);
+              }}
+            >
+              <Text style={styles.suggestionText}>{suggestion}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+    );
+  };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
+    <KeyboardAvoidingView
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      {merchantInfo && (
+      {/* Merchant Name Header */}
+      {merchantData && (
         <View style={styles.merchantHeader}>
-          <Text style={styles.merchantName}>{merchantInfo.name}</Text>
-          <Text style={styles.merchantStats}>
-            Sales: ${merchantInfo.total_sales.toFixed(2)} | Orders: {merchantInfo.transaction_count}
-          </Text>
+          <Text style={styles.merchantName}>{merchantData.name}</Text>
+          <Text style={styles.merchantSubtitle}>Business Assistant</Text>
         </View>
       )}
       
@@ -271,30 +410,44 @@ export default function ChatScreen({ navigation, route }) {
         data={messages}
         renderItem={renderMessage}
         keyExtractor={item => item.id}
-        style={styles.messageList}
-        contentContainerStyle={styles.messageListContent}
+        contentContainerStyle={styles.messagesContainer}
+        onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
       />
+      
+      {/* Typing indicator */}
+      {isTyping && (
+        <View style={styles.typingContainer}>
+          <View style={styles.typingBubble}>
+            <Text style={styles.typingText}>Assistant is typing</Text>
+            <ActivityIndicator size="small" color="#999" style={styles.typingIndicator} />
+          </View>
+        </View>
+      )}
+      
+      {/* Quick suggestions */}
+      {messages.length < 3 && renderSuggestions()}
       
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
-          value={inputMessage}
-          onChangeText={setInputMessage}
+          value={inputText}
+          onChangeText={setInputText}
           placeholder="Type a message..."
-          returnKeyType="send"
-          onSubmitEditing={handleSend}
+          placeholderTextColor="#999"
+          multiline
+          onSubmitEditing={sendMessage}
         />
-        {isLoading ? (
-          <ActivityIndicator size="small" color="#4caf50" style={styles.sendButton} />
-        ) : (
-          <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
-            <Text style={styles.sendButtonText}>Send</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity 
+          style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]} 
+          onPress={sendMessage}
+          disabled={!inputText.trim()}
+        >
+          <Ionicons name="send" size={20} color={inputText.trim() ? "#fff" : "#ccc"} />
+        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -302,80 +455,133 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   merchantHeader: {
-    backgroundColor: '#4caf50',
-    padding: 12,
-    paddingTop: Platform.OS === 'ios' ? 40 : 12,
+    padding: 16,
+    backgroundColor: '#4285F4',
+    alignItems: 'center',
   },
   merchantName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: 'white',
   },
-  merchantStats: {
+  merchantSubtitle: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 4,
+    marginTop: 2,
   },
-  messageList: {
-    flex: 1,
+  messagesContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
-  messageListContent: {
-    padding: 16,
-  },
-  messageBubble: {
-    padding: 12,
-    borderRadius: 16,
-    marginBottom: 8,
+  messageContainer: {
+    marginBottom: 12,
     maxWidth: '80%',
+    alignSelf: 'flex-start',
   },
-  userBubble: {
-    backgroundColor: '#dcf8c6',
+  userMessageContainer: {
     alignSelf: 'flex-end',
   },
-  assistantBubble: {
-    backgroundColor: 'white',
+  assistantMessageContainer: {
     alignSelf: 'flex-start',
+  },
+  messageBubble: {
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 4,
+  },
+  userBubble: {
+    backgroundColor: '#4285F4',
+  },
+  assistantBubble: {
+    backgroundColor: '#EAEAEA',
   },
   messageText: {
     fontSize: 16,
+    lineHeight: 22,
+  },
+  userMessageText: {
+    color: 'white',
+  },
+  assistantMessageText: {
+    color: '#333',
+  },
+  timestamp: {
+    fontSize: 10,
+    color: '#999',
+    alignSelf: 'flex-end',
+    marginRight: 8,
+  },
+  typingContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  typingBubble: {
+    backgroundColor: '#EAEAEA',
+    borderRadius: 18,
+    padding: 12,
+    alignSelf: 'flex-start',
+    maxWidth: '60%',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  typingText: {
+    fontSize: 14,
+    color: '#666',
+    marginRight: 6,
+  },
+  typingIndicator: {
+    marginLeft: 4,
   },
   inputContainer: {
     flexDirection: 'row',
-    padding: 8,
+    padding: 12,
     backgroundColor: 'white',
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: '#eee',
+    alignItems: 'center',
   },
   input: {
     flex: 1,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    backgroundColor: '#f2f2f2',
     borderRadius: 20,
-    backgroundColor: '#f9f9f9',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    maxHeight: 120,
+    fontSize: 16,
   },
   sendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#4285F4',
+    marginLeft: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
-    width: 60,
-    height: 40,
-    backgroundColor: '#4caf50',
-    borderRadius: 20,
   },
-  sendButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
+  sendButtonDisabled: {
+    backgroundColor: '#E0E0E0',
   },
-  actionButton: {
-    marginTop: 8,
-    backgroundColor: '#4caf50',
-    padding: 8,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
+  suggestionsContainer: {
+    marginHorizontal: 16,
+    marginBottom: 12,
   },
-  actionButtonText: {
-    color: 'white',
-    fontSize: 12,
+  suggestionsScrollContent: {
+    paddingVertical: 8,
   },
+  suggestionChip: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: '#4285F4',
+  }
 });
+
+export default ChatScreen;

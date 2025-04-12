@@ -12,23 +12,41 @@ import {
 import { Card } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
-import { API_URL } from '../config';
-import { BarChart, LineChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
+import { LineChart } from 'react-native-chart-kit';
+
+// API URL constant - replace with your actual API URL
+const API_URL = 'http://192.168.68.114:5000'; // Removed the /api suffix
 
 const HomeScreen = ({ navigation, route }) => {
+  // Get merchant ID from route params or use null
+  const { merchantId } = route.params || {};
+  
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [merchantData, setMerchantData] = useState(null);
   const [salesData, setSalesData] = useState([]);
   const [salesError, setSalesError] = useState(null);
-  const [selectedMerchant, setSelectedMerchant] = useState('M001'); // Default merchant or get from storage/params
+  const [selectedMerchant, setSelectedMerchant] = useState(merchantId || null);
 
   const screenWidth = Dimensions.get('window').width;
 
   useEffect(() => {
-    loadMerchantData();
-    loadSalesData();
+    // If we have a merchantId from navigation params, update selected merchant
+    if (route.params?.merchantId) {
+      setSelectedMerchant(route.params.merchantId);
+    }
+  }, [route.params?.merchantId]);
+
+  useEffect(() => {
+    // Only load data if we have a selected merchant
+    if (selectedMerchant) {
+      loadMerchantData();
+      loadSalesData();
+    } else {
+      // If no merchant is selected, redirect to login screen
+      navigation.replace('MerchantLogin');
+    }
   }, [selectedMerchant]);
 
   const loadMerchantData = async () => {
@@ -48,16 +66,18 @@ const HomeScreen = ({ navigation, route }) => {
     }
   };
 
-  const loadSalesData = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/api/merchant/${selectedMerchant}/sales/daily?days=7`);
-      setSalesData(response.data);
-      setSalesError(null);
-    } catch (error) {
-      console.error('Error fetching sales data:', error);
-      setSalesError('Could not load recent sales data');
-    }
-  };
+
+const loadSalesData = async () => {
+  try {
+    // Change days=7 to days=365 to get a full year of data
+    const response = await axios.get(`${API_URL}/merchant/${selectedMerchant}/sales/daily?days=365`);
+    setSalesData(response.data);
+    setSalesError(null);
+  } catch (error) {
+    console.error('Error fetching sales data:', error);
+    setSalesError('Could not load yearly sales data');
+  }
+};
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -80,20 +100,37 @@ const HomeScreen = ({ navigation, route }) => {
         datasets: [{ data: [0] }]
       };
     }
-
+  
+    // Group data by month
+    const monthlyData = {};
+    salesData.forEach(item => {
+      const date = new Date(item.date);
+      const monthKey = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = 0;
+      }
+      monthlyData[monthKey] += item.sales;
+    });
+  
+    // Convert to arrays for chart
+    const labels = Object.keys(monthlyData);
+    const data = Object.values(monthlyData);
+  
     return {
-      labels: salesData.slice(-7).map(item => {
-        const date = new Date(item.date);
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      }),
+      labels: labels,
       datasets: [
         {
-          data: salesData.slice(-7).map(item => item.sales),
+          data: data,
           color: (opacity = 1) => `rgba(66, 133, 244, ${opacity})`,
           strokeWidth: 2
         }
       ]
     };
+  };
+
+  const changeMerchant = () => {
+    navigation.navigate('MerchantLogin');
   };
 
   const navigateToInsights = () => {
@@ -135,6 +172,10 @@ const HomeScreen = ({ navigation, route }) => {
           <Text style={styles.merchantId}>ID: {merchantData?.merchant_id || 'Unknown'}</Text>
           <Text style={styles.joinDate}>Member since: {merchantData?.join_date || 'Unknown'}</Text>
         </View>
+        <TouchableOpacity style={styles.changeMerchantButton} onPress={changeMerchant}>
+          <Ionicons name="swap-horizontal-outline" size={20} color="white" />
+          <Text style={styles.changeMerchantText}>Change</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Today's Summary */}
@@ -164,7 +205,7 @@ const HomeScreen = ({ navigation, route }) => {
 
       {/* Weekly Sales Chart */}
       <Card style={styles.chartCard}>
-        <Card.Title title="Last 7 Days Sales" />
+        <Card.Title title= "Yearly Sales"/>
         <Card.Content>
           {salesError ? (
             <Text style={styles.errorText}>{salesError}</Text>
@@ -309,6 +350,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.7)',
     marginTop: 2,
+  },
+  changeMerchantButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  changeMerchantText: {
+    color: 'white',
+    marginLeft: 4,
+    fontSize: 12,
   },
   summaryCard: {
     margin: 10,
