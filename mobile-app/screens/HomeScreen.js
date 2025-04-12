@@ -1,16 +1,41 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import { LineChart } from 'react-native-chart-kit';
+import React, { useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  ScrollView, 
+  TouchableOpacity, 
+  RefreshControl,
+  ActivityIndicator,
+  Alert
+} from 'react-native';
+import { Card } from 'react-native-paper';
+import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
 import { Dimensions } from 'react-native';
-import { fetchData } from '../utils.js/api';
+import { LineChart } from 'react-native-chart-kit';
 
-const screenWidth = Dimensions.get('window').width;
+const API_URL = 'http://192.168.68.114:5000'; // Removed the /api suffix
 
-export default function HomeScreen({ route }) {
-  const merchantId = route.params?.merchantId || 'M0001';
-  const [summary, setSummary] = useState(null);
-  const [items, setItems] = useState([]);
-  const [salesTrend, setSalesTrend] = useState([]);
+const HomeScreen = ({ navigation, route }) => {
+  // Get merchant ID from route params or use null
+  const { merchantId } = route.params || {};
+  
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [merchantData, setMerchantData] = useState(null);
+  const [salesData, setSalesData] = useState([]);
+  const [salesError, setSalesError] = useState(null);
+  const [selectedMerchant, setSelectedMerchant] = useState(merchantId || null);
+
+  const screenWidth = Dimensions.get('window').width;
+
+  useEffect(() => {
+    // If we have a merchantId from navigation params, update selected merchant
+    if (route.params?.merchantId) {
+      setSelectedMerchant(route.params.merchantId);
+    }
+  }, [route.params?.merchantId]);
 
   useEffect(() => {
     // Only load data if we have a selected merchant
@@ -132,14 +157,23 @@ export default function HomeScreen({ route }) {
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.assistantCard}>
-        <Image source={require('../assets/assistant.png')} style={styles.assistantIcon} />
-        <View style={styles.bubble}>
-          <Text style={styles.bubbleText}>
-            {summary ? `Your sales peaked at RM ${summary.today_sales} today\nTop item: ${items[0]?.name}` : 'Loading insights...'}
-          </Text>
+    <ScrollView 
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
+      {/* Merchant Header */}
+      <View style={styles.header}>
+        <View style={styles.merchantInfoContainer}>
+          <Text style={styles.merchantName}>{merchantData?.name || 'Merchant'}</Text>
+          <Text style={styles.merchantId}>ID: {merchantData?.merchant_id || 'Unknown'}</Text>
+          <Text style={styles.joinDate}>Member since: {merchantData?.join_date || 'Unknown'}</Text>
         </View>
+        <TouchableOpacity style={styles.changeMerchantButton} onPress={changeMerchant}>
+          <Ionicons name="swap-horizontal-outline" size={20} color="white" />
+          <Text style={styles.changeMerchantText}>Change</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Monthly Performance Summary (replacing Today's summary) */}
@@ -272,22 +306,144 @@ export default function HomeScreen({ route }) {
       </Card>
     </ScrollView>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: '#f9f9f9', padding: 20 },
-  assistantCard: { flexDirection: 'row', marginBottom: 20, alignItems: 'center' },
-  assistantIcon: { width: 64, height: 64, marginRight: 10 },
-  bubble: { flex: 1, backgroundColor: '#e1fce9', borderRadius: 12, padding: 10 },
-  bubbleText: { color: '#007e3a', fontSize: 14 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, shadowColor: '#ccc', shadowOpacity: 0.2, shadowRadius: 4 },
-  cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#333' },
-  cardValue: { fontSize: 28, fontWeight: 'bold', color: '#00b14f', marginVertical: 4 },
-  subtext: { fontSize: 13, color: '#666' },
-  chartStyle: { borderRadius: 12, marginTop: 10 },
-  itemRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
-  itemName: { fontSize: 15, color: '#333' },
-  itemValue: { fontSize: 15, color: '#00b14f' },
-  askBtn: { backgroundColor: '#00b14f', borderRadius: 30, paddingVertical: 12, alignItems: 'center', marginTop: 10 },
-  askBtnText: { color: '#fff', fontWeight: 'bold' }
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#555',
+  },
+  header: {
+    backgroundColor: '#4285F4',
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  merchantInfoContainer: {
+    flex: 1,
+  },
+  merchantName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  merchantId: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 2,
+  },
+  joinDate: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginTop: 2,
+  },
+  changeMerchantButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  changeMerchantText: {
+    color: 'white',
+    marginLeft: 4,
+    fontSize: 12,
+  },
+  summaryCard: {
+    margin: 10,
+    elevation: 4,
+  },
+  chartCard: {
+    margin: 10,
+    elevation: 4,
+  },
+  statsCard: {
+    margin: 10,
+    elevation: 4,
+  },
+  actionsCard: {
+    margin: 10,
+    elevation: 4,
+    marginBottom: 20,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 10,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4285F4',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  statGridItem: {
+    width: '48%',
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  statGridValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#4285F4',
+    marginBottom: 4,
+  },
+  statGridLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  actionButton: {
+    width: '48%',
+    backgroundColor: '#f0f7ff',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  actionButtonText: {
+    color: '#4285F4',
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  errorText: {
+    color: 'red',
+    textAlign: 'center',
+    marginVertical: 10,
+  }
 });
+
+export default HomeScreen;
